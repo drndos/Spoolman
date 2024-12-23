@@ -1,6 +1,6 @@
 import { EditOutlined, EyeOutlined, FileOutlined, FilterOutlined, PlusSquareOutlined } from "@ant-design/icons";
-import { List, useTable } from "@refinedev/antd";
-import { IResourceComponentsProps, useInvalidate, useNavigation, useTranslate } from "@refinedev/core";
+import {ExportButton, List, useTable} from "@refinedev/antd";
+import {IResourceComponentsProps, useExport, useInvalidate, useNavigation, useTranslate} from "@refinedev/core";
 import { Button, Dropdown, Table } from "antd";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -28,6 +28,7 @@ import { EntityType, useGetFields } from "../../utils/queryFields";
 import { TableState, useInitialTableState, useStoreInitialState } from "../../utils/saveload";
 import { useCurrency } from "../../utils/settings";
 import { IFilament } from "./model";
+import {flatten} from "../../utils/objects";
 
 dayjs.extend(utc);
 
@@ -83,6 +84,13 @@ export const FilamentList: React.FC<IResourceComponentsProps> = () => {
 
   // Load initial state
   const initialState = useInitialTableState(namespace);
+
+  const { triggerExport, isLoading } = useExport<IFilament>({
+    mapData: item => flatten(item),
+    unparseConfig: {
+      columns: allColumnsWithExtraFields
+    }
+  });
 
   // Fetch data from the API
   // To provide the live updates, we use a custom solution (useLiveify) instead of the built-in refine "liveMode" feature.
@@ -213,6 +221,9 @@ export const FilamentList: React.FC<IResourceComponentsProps> = () => {
             </Button>
           </Dropdown>
           {defaultButtons}
+          <ExportButton type="dashed" onClick={triggerExport} loading={isLoading} >
+            {t("buttons.export")}
+          </ExportButton>
         </>
       )}
     >

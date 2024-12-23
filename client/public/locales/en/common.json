@@ -22,6 +22,7 @@
         "show": "Show",
         "undo": "Undo",
         "import": "Import",
+        "export": "Export",
         "clone": "Clone",
         "archive": "Archive",
         "unArchive": "Unarchive",
