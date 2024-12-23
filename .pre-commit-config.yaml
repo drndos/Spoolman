@@ -5,6 +5,7 @@ repos:
     rev: v4.4.0
     hooks:
       - id: check-yaml
+        exclude: helm/spoolman/templates/common.yaml
       - id: check-added-large-files
       - id: check-case-conflict
       - id: check-merge-conflict

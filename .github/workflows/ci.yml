@@ -103,177 +103,12 @@ jobs:
           name: spoolman
           path: .
   #
-  # Build native image for integration tests
-  #
-  build-amd64:
-    needs: [build-client]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4.1.7
-
-      - name: Download client
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: client
-          path: client/dist
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.6.1
-
-      - name: Log in to the Github Container registry
-        uses: docker/login-action@v3.3.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build Spoolman
-        if: ${{ github.event_name != 'pull_request' }}
-        uses: docker/build-push-action@v6.7.0
-        with:
-          context: .
-          tags: ${{ env.IMAGE_NAME }}:test
-          outputs: type=docker,dest=/tmp/spoolman.tar
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-amd64
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-amd64,mode=max
-
-      # Separate build for pull requests since PRs dont have access to store cache
-      - name: Build Spoolman (PR)
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: docker/build-push-action@v6.7.0
-        with:
-          context: .
-          tags: ${{ env.IMAGE_NAME }}:test
-          outputs: type=docker,dest=/tmp/spoolman.tar
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-amd64
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4.4.0
-        with:
-          name: spoolman-image
-          path: /tmp/spoolman.tar
-  #
-  # Build tester image for integration tests
-  #
-  build-tester:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4.1.7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.6.1
-
-      - name: Log in to the Github Container registry
-        uses: docker/login-action@v3.3.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build Spoolman Tester
-        if: ${{ github.event_name != 'pull_request' }}
-        uses: docker/build-push-action@v6.7.0
-        with:
-          context: ./tests_integration
-          tags: ${{ env.IMAGE_NAME }}-tester:latest
-          outputs: type=docker,dest=/tmp/spoolman-tester.tar
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-tester
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-tester,mode=max
-
-      # Separate build for pull requests since PRs dont have access to store cache
-      - name: Build Spoolman Tester (PR)
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: docker/build-push-action@v6.7.0
-        with:
-          context: ./tests_integration
-          tags: ${{ env.IMAGE_NAME }}-tester:latest
-          outputs: type=docker,dest=/tmp/spoolman-tester.tar
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-tester
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4.4.0
-        with:
-          name: spoolman-tester-image
-          path: /tmp/spoolman-tester.tar
-  #
-  # Perform integration tests
-  #
-  test:
-    needs: [build-amd64, build-tester]
-    strategy:
-      matrix:
-        dbtype: ["postgres", "sqlite", "mariadb", "cockroachdb"]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4.1.7
-
-      - name: Download built images
-        uses: actions/download-artifact@v4.1.7
-        with:
-          pattern: spoolman*-image
-          path: /tmp
-
-      - name: Load built images
-        run: |
-          docker load --input /tmp/spoolman-image/spoolman.tar
-          docker load --input /tmp/spoolman-tester-image/spoolman-tester.tar
-
-      - name: Perform integration tests
-        uses: hoverkraft-tech/compose-action@v2.0.1
-        with:
-          compose-file: "./tests_integration/docker-compose-${{ matrix.dbtype }}.yml"
-          up-flags: "--abort-on-container-exit"
-          down-flags: "--volumes"
-  #
-  # Build arm64 image
-  # Don't run this for pull requests
-  # Only push to buildcache and let release job push to registry
-  #
-  build-arm64:
-    if: ${{ github.event_name != 'pull_request' }}
-    needs: [build-client]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4.1.7
-
-      - name: Download client
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: client
-          path: client/dist
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3.2.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.6.1
-
-      - name: Log in to the Github Container registry
-        uses: docker/login-action@v3.3.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and cache Docker image
-        uses: docker/build-push-action@v6.7.0
-        with:
-          context: .
-          platforms: linux/arm64
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-arm64
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-arm64,mode=max
-
-  #
   # Release image if tests pass
   # Don't run this for pull requests
   #
   publish-images:
     if: ${{ github.event_name != 'pull_request' }}
-    needs: [test, build-amd64, build-arm64, style, build-client]
+    needs: [style, build-client]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -319,7 +154,7 @@ jobs:
         uses: docker/build-push-action@v6.7.0
         with:
           context: .
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -331,7 +166,6 @@ jobs:
             type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-arm64
   publish-helm:
     if: ${{ github.event_name != 'pull_request' }}
-    needs: [test]
     name: Build helm package & push
     runs-on: ubuntu-latest
     permissions:
@@ -367,43 +201,4 @@ jobs:
           echo "Pushing chart: $CHART_FILE"
 
           # Push chart to GHCR
-          helm push "$CHART_FILE" oci://ghcr.io/${{ github.repository }}/helm
-  #
-  # Create Github Release if CI was triggered by a tag
-  #
-  publish-release:
-    if: ${{ (github.event_name != 'pull_request') && startsWith(github.event.ref, 'refs/tags/v') }}
-    needs: [publish-images]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download built spoolman
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: spoolman
-          path: /tmp/spoolman
-
-      - name: Generate release info
-        run: |
-          cd /tmp/spoolman
-          echo '{
-            "project_name": "Spoolman",
-            "project_owner": "Donkie",
-            "version": "${{ github.ref_name }}"
-          }' > release_info.json
-
-      - name: Zip
-        run: |
-          cd /tmp/spoolman
-          zip -r spoolman.zip .
-
-      - name: Create release and upload build
-        uses: softprops/action-gh-release@v1
-        id: create-release
-        with:
-          draft: true
-          name: ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
-          files: /tmp/spoolman/spoolman.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
-          body: "⚠️ TODO ⚠️"
-
+          helm push "$CHART_FILE" oci://ghcr.io/${{ env.IMAGE_NAME }}/helm
