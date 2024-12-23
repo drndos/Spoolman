@@ -13,6 +13,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: drndos/spoolman
+  HELM_NAME: drndos/spoolman/helm/spoolman
 
 jobs:
   #
@@ -265,52 +266,14 @@ jobs:
           platforms: linux/arm64
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-arm64
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-arm64,mode=max
-  #
-  # Build arm/v7 image
-  # Don't run this for pull requests
-  # Only push to buildcache and let release job push to registry
-  #
-  build-armv7:
-    if: ${{ github.event_name != 'pull_request' }}
-    needs: [build-client]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4.1.7
 
-      - name: Download client
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: client
-          path: client/dist
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3.2.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.6.1
-
-      - name: Log in to the Github Container registry
-        uses: docker/login-action@v3.3.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and cache Docker image
-        uses: docker/build-push-action@v6.7.0
-        with:
-          context: .
-          platforms: linux/arm/v7
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-armv7
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-armv7,mode=max
   #
   # Release image if tests pass
   # Don't run this for pull requests
   #
   publish-images:
     if: ${{ github.event_name != 'pull_request' }}
-    needs: [test, build-amd64, build-arm64, build-armv7, style, build-client]
+    needs: [test, build-amd64, build-arm64, style, build-client]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -366,7 +329,45 @@ jobs:
           cache-from: |
             type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-amd64
             type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-arm64
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-armv7
+  publish-helm:
+    if: ${{ github.event_name != 'pull_request' }}
+    needs: [test]
+    name: Build helm package & push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package Helm Chart
+        run: |
+          helm package helm/spoolman --destination ./
+
+      # Step 6: Push the Helm Chart to GHCR
+      - name: Push Helm Chart to GHCR
+        run: |
+          CHART_NAME=$(helm show chart helm/spoolman | grep '^name:' | awk '{print $2}')
+          CHART_VERSION=$(helm show chart helm/spoolman | grep '^version:' | awk '{print $2}')
+          CHART_FILE="${CHART_NAME}-${CHART_VERSION}.tgz"
+          echo "Pushing chart: $CHART_FILE"
+
+          # Push chart to GHCR
+          helm push "$CHART_FILE" oci://ghcr.io/${{ github.repository }}/helm
   #
   # Create Github Release if CI was triggered by a tag
   #
