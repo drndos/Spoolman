@@ -12,7 +12,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: donkie/spoolman
+  IMAGE_NAME: drndos/spoolman
 
 jobs:
   #
@@ -53,12 +53,12 @@ jobs:
         uses: actions/setup-python@v5.2.0
         with:
           python-version: "3.9"
-    
+
       - name: Export requirements
         run: |
           pip install pdm
           pdm export -o requirements.txt --without-hashes
-    
+
       - name: Install client dependencies
         run: |
           cd client
@@ -74,7 +74,7 @@ jobs:
         run: |
           echo "GIT_COMMIT=$(git rev-parse --short HEAD)" > build.txt
           echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> build.txt
-  
+
       # Remove client source and keep only the built dist
       - name: Clean
         run: |
@@ -88,7 +88,7 @@ jobs:
       - name: Fix permissions
         run: |
           chmod +x scripts/*.sh
-      
+
       - name: Upload client Spoolman artifact
         uses: actions/upload-artifact@v4.4.0
         with:
@@ -380,7 +380,7 @@ jobs:
         with:
           name: spoolman
           path: /tmp/spoolman
-      
+
       - name: Generate release info
         run: |
           cd /tmp/spoolman
@@ -405,4 +405,4 @@ jobs:
           files: /tmp/spoolman/spoolman.zip
           token: ${{ secrets.GITHUB_TOKEN }}
           body: "⚠️ TODO ⚠️"
-          
+
